@@ -1,66 +1,77 @@
 const express = require("express");
 const fs = require("fs");
+const path = require("path");
 
 const Movies = require("./movieDB");
 
 const app = express.Router();
 
-var ids = 0;
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/show', (req, res) => {
-    Movies.find()
-    .then(response => {
+// Get all movies
+app.get('/show', async (req, res) => {
+    try {
+        const movies = await Movies.find().select('title path _id');
         res.status(200).json({
-            message: "Movies fetched succesfully",
-            Movies: response
-        })
-    })
-    .catch(err => {
-        res.status(500).json({error: err});
-    })
-})
+            message: "Movies fetched successfully",
+            Movies: movies
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-app.get('/show/:id', (req, res) => {
-    let { id } = req.params;
-    ids = id;
+// Stream video
+app.get('/player', async (req, res) => {
+    try {
+        const videoId = req.query.id;
+        if (!videoId) {
+            return res.status(400).json({ error: 'Video ID is required' });
+        }
 
-    res.sendFile(__dirname + '/index.html');
-})
+        const video = await Movies.findById(videoId);
+        if (!video) {
+            return res.status(404).json({ error: 'Video not found' });
+        }
 
-app.get('/player', function(req, res){
-    console.log(ids);
+        const videoPath = video.path;
+        const videoSize = fs.statSync(videoPath).size;
+        const range = req.headers.range;
 
-    Movies.findById(ids)
-    .then(response => {
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : videoSize - 1;
+            const chunksize = (end - start) + 1;
+            const stream = fs.createReadStream(videoPath, { start, end });
+            
+            const headers = {
+                "Content-Range": `bytes ${start}-${end}/${videoSize}`,
+                "Accept-Ranges": "bytes",
+                "Content-Length": chunksize,
+                "Content-Type": "video/mp4"
+            };
 
-        const range = req.headers.range;                // The range of the video
+            res.writeHead(206, headers);
+            stream.pipe(res);
+        } else {
+            const headers = {
+                "Content-Length": videoSize,
+                "Content-Type": "video/mp4"
+            };
 
-        const string = JSON.stringify(response);
-        const stringValue = JSON.parse(string);
-        const path = stringValue['path'];               // Fetching the link from the mongoDB
-        
-        const videoSize = fs.statSync(path).size;       // Fetching the file size
-        const chunkSize = 10**6;                            // 10 to the power of 6 == 1000000 (1MB)
-        const start = Number(range.replace(/\D/g, ""));     // starting point of the video file
-        const end = Math.min(start + chunkSize, videoSize - 1)  // Ending point of the video in a chunk
-        const contentLength = end - start + 1;                  // total video length
-        
-        const headers = {                                       // creating an header identification of the transmission
-            "Content-Range": `bytes ${start}-${end}/${videoSize}`, 
-            "Accept-Ranges": "bytes", 
-            "Content-Length": contentLength, 
-            "Content-Type": "video/mp4"
-        } 
-        res.writeHead(206, headers) 
-        const stream = fs.createReadStream(path, {      // streaming the file
-            start, 
-            end 
-        }) 
-        stream.pipe(res) 
-    }) 
-    .catch(err => {
-        res.status(500).json({ error: err })
-    })
-})
+            res.writeHead(200, headers);
+            fs.createReadStream(videoPath).pipe(res);
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Serve the main page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 module.exports = app;

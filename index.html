@@ -3,14 +3,95 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Mini Project 3</title>
+        <link rel="stylesheet" href="style.css" />
+        <title>Video Streaming Platform</title>
     </head>
 
     <body>
+        <div class="container">
+            <header class="header">
+                <h1>Video Streaming Platform</h1>
+            </header>
 
-        <video id="videoPlayer" width="650" controls>
-            <source src="/player" type="video/mp4" />
-        </video>
-        
+            <main class="main-content">
+                <div class="video-container">
+                    <video id="videoPlayer" controls>
+                        <source src="/player" type="video/mp4" />
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="video-info">
+                        <h2 id="currentVideoTitle">Loading...</h2>
+                    </div>
+                </div>
+
+                <aside class="playlist">
+                    <h2>Video Playlist</h2>
+                    <ul class="video-list" id="videoList">
+                        <!-- Videos will be loaded dynamically -->
+                    </ul>
+                </aside>
+            </main>
+        </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', async () => {
+                const videoList = document.getElementById('videoList');
+                const videoPlayer = document.getElementById('videoPlayer');
+                const currentVideoTitle = document.getElementById('currentVideoTitle');
+                let currentVideoId = null;
+
+                // Fetch available videos from the server
+                async function loadVideos() {
+                    try {
+                        const response = await fetch('/show');
+                        const data = await response.json();
+                        return data.Movies;
+                    } catch (error) {
+                        console.error('Error loading videos:', error);
+                        return [];
+                    }
+                }
+
+                // Update video source and play
+                function playVideo(videoId, videoTitle) {
+                    if (currentVideoId === videoId) return;
+                    
+                    currentVideoId = videoId;
+                    currentVideoTitle.textContent = videoTitle;
+                    
+                    // Update video source
+                    const videoSource = videoPlayer.querySelector('source');
+                    videoSource.src = `/player?id=${videoId}`;
+                    videoPlayer.load();
+                    videoPlayer.play();
+
+                    // Update active state in playlist
+                    document.querySelectorAll('.video-item').forEach(item => {
+                        item.classList.remove('active');
+                        if (item.dataset.videoId === videoId) {
+                            item.classList.add('active');
+                        }
+                    });
+                }
+
+                // Initialize the video player
+                const videos = await loadVideos();
+                videos.forEach(video => {
+                    const li = document.createElement('li');
+                    li.className = 'video-item';
+                    li.dataset.videoId = video._id;
+                    li.textContent = video.title;
+                    li.addEventListener('click', () => {
+                        playVideo(video._id, video.title);
+                    });
+                    videoList.appendChild(li);
+                });
+
+                // Play first video by default if available
+                if (videos.length > 0) {
+                    playVideo(videos[0]._id, videos[0].title);
+                }
+            });
+        </script>
     </body>
 </html>
