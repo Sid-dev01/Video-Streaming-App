@@ -6,7 +6,7 @@ const route = require("./route");
 
 // Environment variables with fallbacks
 const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || process.env.ATLAS_URI || 'mongodb://localhost:27017/video-streaming';
+const MONGODB_URI = process.env.MONGODB_URI;
 const HOSTNAME = process.env.HOSTNAME || "localhost";
 
 // Express app setup
@@ -54,7 +54,7 @@ connectWithRetry()
     .then(success => {
         if (success) {
             app.listen(PORT, HOSTNAME, () => {
-                console.log(`Server is running at http://${HOSTNAME}:${PORT}`);
+                console.log(`Server is running at http://HOSTNAME:${PORT}`);
             });
 
             // Handle MongoDB connection errors after initial connection
