@@ -97,6 +97,7 @@ body {
 .video-item:hover {
     background: #3a3a3a;
     transform: translateX(5px);
+    border-left-color: #1e90ff;
 }
 
 .video-item.active {
@@ -154,4 +155,42 @@ video::-webkit-media-controls-panel {
     .playlist {
         max-height: 40vh;
     }
+}
+
+/* Add these new styles to the existing CSS file */
+
+.error-message {
+    display: none;
+    background-color: #ff4444;
+    color: white;
+    padding: 0.8rem;
+    border-radius: 4px;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.loading-message {
+    display: none;
+    color: #1e90ff;
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.no-videos {
+    color: #666;
+    padding: 1rem;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Add loading animation */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.loading-message {
+    animation: pulse 1.5s infinite;
 }

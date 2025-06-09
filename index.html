@@ -16,16 +16,18 @@
             <main class="main-content">
                 <div class="video-container">
                     <video id="videoPlayer" controls>
-                        <source src="/player" type="video/mp4" />
+                        <source src="" type="video/mp4" />
                         Your browser does not support the video tag.
                     </video>
                     <div class="video-info">
-                        <h2 id="currentVideoTitle">Loading...</h2>
+                        <h2 id="currentVideoTitle">Select a video to play</h2>
+                        <div id="errorMessage" class="error-message"></div>
                     </div>
                 </div>
 
                 <aside class="playlist">
                     <h2>Video Playlist</h2>
+                    <div id="loadingMessage" class="loading-message">Loading videos...</div>
                     <ul class="video-list" id="videoList">
                         <!-- Videos will be loaded dynamically -->
                     </ul>
@@ -38,22 +40,43 @@
                 const videoList = document.getElementById('videoList');
                 const videoPlayer = document.getElementById('videoPlayer');
                 const currentVideoTitle = document.getElementById('currentVideoTitle');
+                const loadingMessage = document.getElementById('loadingMessage');
+                const errorMessage = document.getElementById('errorMessage');
                 let currentVideoId = null;
+
+                // Error handling function
+                function showError(message) {
+                    errorMessage.textContent = message;
+                    errorMessage.style.display = 'block';
+                    setTimeout(() => {
+                        errorMessage.style.display = 'none';
+                    }, 5000);
+                }
 
                 // Fetch available videos from the server
                 async function loadVideos() {
                     try {
-                        const response = await fetch('/show');
+                        loadingMessage.style.display = 'block';
+                        const response = await fetch('/api/movies');
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch videos');
+                        }
                         const data = await response.json();
-                        return data.Movies;
+                        if (!data.success) {
+                            throw new Error(data.error || 'Failed to fetch videos');
+                        }
+                        return data.movies;
                     } catch (error) {
                         console.error('Error loading videos:', error);
+                        showError('Failed to load videos. Please try again later.');
                         return [];
+                    } finally {
+                        loadingMessage.style.display = 'none';
                     }
                 }
 
                 // Update video source and play
-                function playVideo(videoId, videoTitle) {
+                function playVideo(videoId, videoTitle, videoPath) {
                     if (currentVideoId === videoId) return;
                     
                     currentVideoId = videoId;
@@ -61,9 +84,25 @@
                     
                     // Update video source
                     const videoSource = videoPlayer.querySelector('source');
-                    videoSource.src = `/player?id=${videoId}`;
+                    videoSource.src = videoPath;
                     videoPlayer.load();
-                    videoPlayer.play();
+
+                    // Handle video loading errors
+                    videoPlayer.onerror = () => {
+                        showError('Error loading video. Please try again.');
+                        currentVideoTitle.textContent = 'Error playing video';
+                    };
+
+                    // Only try to play if user has interacted with the page
+                    if (document.documentElement.hasAttribute('data-user-interacted')) {
+                        videoPlayer.play().catch(error => {
+                            // Only show error for actual playback failures, not autoplay restrictions
+                            if (error.name !== 'NotAllowedError') {
+                                console.error('Error playing video:', error);
+                                showError('Error playing video. Please try again.');
+                            }
+                        });
+                    }
 
                     // Update active state in playlist
                     document.querySelectorAll('.video-item').forEach(item => {
@@ -74,22 +113,42 @@
                     });
                 }
 
-                // Initialize the video player
-                const videos = await loadVideos();
-                videos.forEach(video => {
-                    const li = document.createElement('li');
-                    li.className = 'video-item';
-                    li.dataset.videoId = video._id;
-                    li.textContent = video.title;
-                    li.addEventListener('click', () => {
-                        playVideo(video._id, video.title);
-                    });
-                    videoList.appendChild(li);
+                // Add user interaction flag
+                document.addEventListener('click', () => {
+                    document.documentElement.setAttribute('data-user-interacted', 'true');
+                }, { once: true });
+
+                // Handle play button clicks
+                videoPlayer.addEventListener('play', () => {
+                    // Clear any error messages when user successfully plays the video
+                    errorMessage.style.display = 'none';
                 });
 
-                // Play first video by default if available
-                if (videos.length > 0) {
-                    playVideo(videos[0]._id, videos[0].title);
+                // Initialize the video player
+                try {
+                    const videos = await loadVideos();
+                    if (videos.length === 0) {
+                        videoList.innerHTML = '<li class="no-videos">No videos available</li>';
+                        return;
+                    }
+
+                    videos.forEach(video => {
+                        const li = document.createElement('li');
+                        li.className = 'video-item';
+                        li.dataset.videoId = video.id;
+                        li.textContent = video.title;
+                        li.addEventListener('click', () => {
+                            playVideo(video.id, video.title, video.path);
+                        });
+                        videoList.appendChild(li);
+                    });
+
+                    // Load first video but don't autoplay
+                    const firstVideo = videos[0];
+                    playVideo(firstVideo.id, firstVideo.title, firstVideo.path);
+                } catch (error) {
+                    console.error('Error initializing video player:', error);
+                    showError('Failed to initialize video player. Please refresh the page.');
                 }
             });
         </script>

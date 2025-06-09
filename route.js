@@ -10,32 +10,49 @@ const app = express.Router();
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Get all movies
-app.get('/show', async (req, res) => {
+app.get('/api/movies', async (req, res) => {
     try {
         const movies = await Movies.find().select('title path _id');
         res.status(200).json({
+            success: true,
             message: "Movies fetched successfully",
-            Movies: movies
+            movies: movies.map(movie => ({
+                id: movie._id,
+                title: movie.title,
+                path: `/api/stream/${movie._id}`
+            }))
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Error fetching movies:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to fetch movies' 
+        });
     }
 });
 
 // Stream video
-app.get('/player', async (req, res) => {
+app.get('/api/stream/:id', async (req, res) => {
     try {
-        const videoId = req.query.id;
-        if (!videoId) {
-            return res.status(400).json({ error: 'Video ID is required' });
-        }
-
-        const video = await Movies.findById(videoId);
+        const video = await Movies.findById(req.params.id);
         if (!video) {
-            return res.status(404).json({ error: 'Video not found' });
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Video not found' 
+            });
         }
 
         const videoPath = video.path;
+        
+        // Verify file exists
+        if (!fs.existsSync(videoPath)) {
+            console.error(`Video file not found at path: ${videoPath}`);
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Video file not found' 
+            });
+        }
+
         const videoSize = fs.statSync(videoPath).size;
         const range = req.headers.range;
 
@@ -44,8 +61,16 @@ app.get('/player', async (req, res) => {
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : videoSize - 1;
             const chunksize = (end - start) + 1;
-            const stream = fs.createReadStream(videoPath, { start, end });
             
+            if (start >= videoSize) {
+                res.status(416).json({ 
+                    success: false, 
+                    error: 'Requested range not satisfiable' 
+                });
+                return;
+            }
+
+            const stream = fs.createReadStream(videoPath, { start, end });
             const headers = {
                 "Content-Range": `bytes ${start}-${end}/${videoSize}`,
                 "Accept-Ranges": "bytes",
@@ -54,6 +79,17 @@ app.get('/player', async (req, res) => {
             };
 
             res.writeHead(206, headers);
+            
+            stream.on('error', (error) => {
+                console.error(`Error streaming video: ${error.message}`);
+                if (!res.headersSent) {
+                    res.status(500).json({ 
+                        success: false, 
+                        error: 'Error streaming video' 
+                    });
+                }
+            });
+
             stream.pipe(res);
         } else {
             const headers = {
@@ -62,10 +98,26 @@ app.get('/player', async (req, res) => {
             };
 
             res.writeHead(200, headers);
-            fs.createReadStream(videoPath).pipe(res);
+            const stream = fs.createReadStream(videoPath);
+            
+            stream.on('error', (error) => {
+                console.error(`Error streaming video: ${error.message}`);
+                if (!res.headersSent) {
+                    res.status(500).json({ 
+                        success: false, 
+                        error: 'Error streaming video' 
+                    });
+                }
+            });
+
+            stream.pipe(res);
         }
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Error handling video stream:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Internal server error' 
+        });
     }
 });
 

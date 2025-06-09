@@ -3,7 +3,15 @@ const mongoose = require('mongoose');
 const path = require('path');
 const Movie = require('./movieDB');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/video-streaming';
+const MONGODB_URI = process.env.MONGODB_URI || process.env.ATLAS_URI || 'mongodb://localhost:27017/video-streaming';
+
+// MongoDB connection options
+const mongooseOptions = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    retryWrites: true,
+    w: 'majority'
+};
 
 // Sample movies data
 const movies = [
@@ -29,21 +37,22 @@ const movies = [
     }
 ];
 
-// Connect to MongoDB
-console.log('Connecting to MongoDB...');
-mongoose.connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-.then(async () => {
-    console.log('Connected to MongoDB successfully');
-    
+async function seedDatabase() {
     try {
+        // Connect to MongoDB
+        console.log('Connecting to MongoDB...');
+        await mongoose.connect(MONGODB_URI, mongooseOptions);
+        console.log('Connected to MongoDB successfully!');
+        console.log(`Database: ${mongoose.connection.name}`);
+        console.log(`Host: ${mongoose.connection.host}`);
+
         // Clear existing movies
+        console.log('Clearing existing movies...');
         await Movie.deleteMany({});
         console.log('Cleared existing movies');
 
         // Add new movies
+        console.log('Adding new movies...');
         const result = await Movie.insertMany(movies);
         console.log(`Added ${result.length} movies to database`);
         
@@ -53,15 +62,19 @@ mongoose.connect(MONGODB_URI, {
         allMovies.forEach(movie => {
             console.log(`- ${movie.title} (${movie.path})`);
         });
+
     } catch (error) {
-        console.error('Error adding movies:', error);
+        console.error('Error:', error.message);
+        process.exit(1);
+    } finally {
+        // Close the connection
+        if (mongoose.connection.readyState === 1) {
+            await mongoose.connection.close();
+            console.log('Database connection closed');
+        }
+        process.exit(0);
     }
-    
-    // Close the connection
-    await mongoose.connection.close();
-    console.log('Database connection closed');
-})
-.catch(err => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-}); 
+}
+
+// Run the seeding function
+seedDatabase(); 
