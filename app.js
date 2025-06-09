@@ -53,8 +53,8 @@ const connectWithRetry = async (retries = 5, interval = 5000) => {
 connectWithRetry()
     .then(success => {
         if (success) {
-            app.listen(PORT, HOSTNAME, () => {
-                console.log(`Server is running at http://HOSTNAME:${PORT}`);
+            app.listen(PORT, () => {
+                console.log(`Server is running on port${PORT}`);
             });
 
             // Handle MongoDB connection errors after initial connection
