@@ -12,8 +12,7 @@ const HOSTNAME = process.env.HOSTNAME || "localhost";
 // Express app setup
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(path.join(__dirname)));  // To serve index.html and style.css
+app.use(express.static(__dirname));  // To serve index.html and style.css
 
 // Routes
 app.use('/', route);
